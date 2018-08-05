@@ -19,3 +19,8 @@ then you don't have to mess with this.
 
 # Running
 To run you can use the makefile with `make run` or you can run it directly with `./helloWasm`
+
+# References:
+- https://www.youtube.com/watch?v=Xp53ln1nFuk
+- https://blog.owulveryck.info/2018/06/08/some-notes-about-the-upcoming-webassembly-support-in-go.html
+- https://brianketelsen.com/web-assembly-and-go-a-look-to-the-future/

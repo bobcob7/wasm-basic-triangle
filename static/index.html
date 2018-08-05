@@ -9,35 +9,53 @@ license that can be found in the LICENSE file.
 <head>
 	<meta charset="utf-8">
 	<title>Go wasm</title>
+    <script src="wasm_exec.js"></script>
+    <script>
+        if (!WebAssembly.instantiateStreaming) { // polyfill
+            WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                const source = await (await resp).arrayBuffer();
+                return await WebAssembly.instantiate(source, importObject);
+            };
+        }
+
+        const go = new Go();
+        let mod, inst;
+        WebAssembly.instantiateStreaming(fetch("bundle.wasm"), go.importObject).then((result) => {
+            mod = result.module;
+            inst = result.instance;
+            run().then((result) => {
+                console.log("Ran WASM: ", result)
+            }, (failure) => {
+                console.log("Failed to run WASM: ", failure)
+            })
+        });
+
+        async function run() {
+            console.clear();
+            await go.run(inst);
+            inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
+        }
+    </script>
 </head>
 
 <body>
-	<script src="wasm_exec.js"></script>
-	<script>
-		if (!WebAssembly.instantiateStreaming) { // polyfill
-			WebAssembly.instantiateStreaming = async (resp, importObject) => {
-				const source = await (await resp).arrayBuffer();
-				return await WebAssembly.instantiate(source, importObject);
-			};
-		}
-
-		const go = new Go();
-		let mod, inst;
-		WebAssembly.instantiateStreaming(fetch("bundle.wasm"), go.importObject).then((result) => {
-			mod = result.module;
-			inst = result.instance;
-			document.getElementById("runButton").disabled = false;
-		});
-
-		async function run() {
-			console.clear();
-			await go.run(inst);
-			inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
-		}
-	</script>
-
-	<button onClick="run();" id="runButton" disabled>Run</button>
-	<h1 id="thing">Hello WASM</h1>
+	<h1 id="display">Hello WASM</h1>
+	<span>
+		<button id="bumpButton">Bump</button>
+		<button id="resetButton">Reset</button>
+		<button id="reverseButton">Reverse</button>
+	</span>
+	<p id="help">
+	Click Bump to move the value.</br>
+	Click Reset to change to value to 0.</br>
+	Click Reverse to change the bump button's behaviour.</p>
 </body>
+
+<footer>
+    <style>
+        button.reverse {background-color: lightcoral;}
+        h1.reverse {color: red;}
+    </style>
+</footer>
 
 </html>
