@@ -1,15 +1,13 @@
-GOROOT=/usr/local/go
+all: wasm-basic-triangle
 
-all: helloWasm
+wasm-basic-triangle: output.wasm main.go
+	go build -o wasm-basic-triangle main.go
 
-helloWasm: output.wasm helloWasm.go
-	PATH=$(GOROOT)/misc/wasm:$(GOROOT)/bin:$PATH go build -o helloWasm helloWasm.go
+output.wasm: bundle.go
+	GOOS=js GOARCH=wasm go build -o bundle.wasm bundle.go
 
-output.wasm: helloWasm.go
-	PATH=$(GOROOT)/misc/wasm:$(GOROOT)/bin:$PATH GOOS=js GOARCH=wasm go build -o bundle.wasm bundle.go
-
-run: output.wasm helloWasm
-	./helloWasm
+run: output.wasm wasm-basic-triangle
+	./wasm-basic-triangle
 
 clean:
-	rm -f helloWasm *.wasm
+	rm -f wasm-basic-triangle *.wasm

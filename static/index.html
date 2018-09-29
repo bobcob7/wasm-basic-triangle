@@ -1,14 +1,6 @@
-<!doctype html>
-<!--
-Copyright 2018 The Go Authors. All rights reserved.
-Use of this source code is governed by a BSD-style
-license that can be found in the LICENSE file.
--->
-<html>
-
 <head>
 	<meta charset="utf-8">
-	<title>Go wasm</title>
+	<title>WASM Basic Triangle</title>
     <script src="wasm_exec.js"></script>
     <script>
         if (!WebAssembly.instantiateStreaming) { // polyfill
@@ -17,7 +9,6 @@ license that can be found in the LICENSE file.
                 return await WebAssembly.instantiate(source, importObject);
             };
         }
-
         const go = new Go();
         let mod, inst;
         WebAssembly.instantiateStreaming(fetch("bundle.wasm"), go.importObject).then((result) => {
@@ -29,7 +20,6 @@ license that can be found in the LICENSE file.
                 console.log("Failed to run WASM: ", failure)
             })
         });
-
         async function run() {
             console.clear();
             await go.run(inst);
@@ -39,22 +29,18 @@ license that can be found in the LICENSE file.
 </head>
 
 <body>
-	<h1 id="display">Hello WASM</h1>
-	<span>
-		<button id="bumpButton">Bump</button>
-		<button id="resetButton">Reset</button>
-		<button id="reverseButton">Reverse</button>
-	</span>
-	<p id="help">
-	Click Bump to move the value.</br>
-	Click Reset to change to value to 0.</br>
-	Click Reverse to change the bump button's behaviour.</p>
+	<canvas id="gocanvas"></canvas>
 </body>
 
 <footer>
     <style>
-        button.reverse {background-color: lightcoral;}
-        h1.reverse {color: red;}
+        #gocanvas {
+			position:fixed;
+			opacity:0.9;
+			width: 100%;
+			height:100%;
+			top:0;right:0;bottom:0;left:0;
+		}
     </style>
 </footer>
 

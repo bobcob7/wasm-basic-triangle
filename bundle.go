@@ -1,119 +1,179 @@
 package main
 
 import (
-	"runtime"
-	"time"
-	"log"
 	"syscall/js"
-	"fmt"
 )
 
-const MaxCount = 60
+var (
+	width   int
+	height  int
+	gl      js.Value
+	glTypes GLTypes
+)
 
-func countUp(output chan int, ticker chan int) {
-	var count = 0
-	for {
-		switch <- ticker {
-		case 1:
-			if count < MaxCount {
-				count++
-			} else {
-				count = 0
-			}
-		case -1:
-			if count > 0 {
-				count--
-			} else {
-				count = MaxCount
-			}
-		case 0:
-			// Do nothing this means that there is no update
-		default:
-			count = 0
-		}
-		output <- count
-	}
+type GLTypes struct {
+	staticDraw         js.Value
+	arrayBuffer        js.Value
+	elementArrayBuffer js.Value
+	vertexShader       js.Value
+	fragmentShader     js.Value
+	float              js.Value
+	depthTest          js.Value
+	colorBufferBit     js.Value
+	triangles          js.Value
+	unsignedShort      js.Value
 }
 
-func autoTick(ticker *time.Ticker, function func(args []js.Value)) {
-	for range ticker.C {
-		log.Println("RoboTick")
-		function(nil)
-	}
+func (types *GLTypes) New() {
+	types.staticDraw = gl.Get("STATIC_DRAW")
+	types.arrayBuffer = gl.Get("ARRAY_BUFFER")
+	types.elementArrayBuffer = gl.Get("ELEMENT_ARRAY_BUFFER")
+	types.vertexShader = gl.Get("VERTEX_SHADER")
+	types.fragmentShader = gl.Get("FRAGMENT_SHADER")
+	types.float = gl.Get("FLOAT")
+	types.depthTest = gl.Get("DEPTH_TEST")
+	types.colorBufferBit = gl.Get("COLOR_BUFFER_BIT")
+	types.triangles = gl.Get("TRIANGLES")
+	types.unsignedShort = gl.Get("UNSIGNED_SHORT")
 }
 
 func main() {
-	log.Printf("Hello Logger:\t%s - %s\n", runtime.GOOS, runtime.GOARCH)
-	count := make(chan int)
-	hidden := false
-	forward := true
-	ticker := make(chan int)
 
-	bumpClick := func (args []js.Value) {
-		if forward {
-			ticker <- 1
-		} else {
-			ticker <- -1
-		}
+	// Init Canvas stuff
+	doc := js.Global().Get("document")
+	canvasEl := doc.Call("getElementById", "gocanvas")
+	width = doc.Get("body").Get("clientWidth").Int()
+	height = doc.Get("body").Get("clientHeight").Int()
+	canvasEl.Set("width", width)
+	canvasEl.Set("height", height)
+
+	gl = canvasEl.Call("getContext", "webgl")
+	if gl == js.Undefined() {
+		gl = canvasEl.Call("getContext", "experimental-webgl")
+	}
+	// once again
+	if gl == js.Undefined() {
+		js.Global().Call("alert", "browser might not support webgl")
+		return
 	}
 
-	resetClick := func (args []js.Value) {
-			ticker <- 2
+	glTypes.New()
+
+	//// VERTEX BUFFER ////
+	var verticesNative = []float32{
+		-0.5, 0.5, 0,
+		-0.5, -0.5, 0,
+		0.5, -0.5, 0,
 	}
+	var vertices = js.TypedArrayOf(verticesNative)
+	// Create buffer
+	vertexBuffer := gl.Call("createBuffer", glTypes.arrayBuffer)
+	// Bind to buffer
+	gl.Call("bindBuffer", glTypes.arrayBuffer, vertexBuffer)
 
-	reverseClick := func (args []js.Value) {
-		forward = !forward
-		ticker <- 0
+	// Pass data to buffer
+	gl.Call("bufferData", glTypes.arrayBuffer, vertices, glTypes.staticDraw)
+
+	// Unbind buffer
+	gl.Call("bindBuffer", glTypes.arrayBuffer, nil)
+
+	//// INDEX BUFFER ////
+	var indicesNative = []uint32{
+		2, 1, 0,
 	}
+	var indices = js.TypedArrayOf(indicesNative)
 
-	globalDoc := js.Global().Get("document")
-	display := globalDoc.Call("getElementById", "display")
-	help := globalDoc.Call("getElementById", "help")
-	bumpButton := globalDoc.Call("getElementById", "bumpButton")
-	resetButton := globalDoc.Call("getElementById", "resetButton")
-	reverseButton := globalDoc.Call("getElementById", "reverseButton")
+	// Create buffer
+	indexBuffer := gl.Call("createBuffer", glTypes.elementArrayBuffer)
 
-	bump := js.NewCallback(bumpClick)
-	reset := js.NewCallback(resetClick)
-	reverse := js.NewCallback(reverseClick)
+	// Bind to buffer
+	gl.Call("bindBuffer", glTypes.elementArrayBuffer, indexBuffer)
 
-	log.Println("Adding callbacks")
-	bumpButton.Call("addEventListener", "click", bump)
-	resetButton.Call("addEventListener", "click", reset)
-	reverseButton.Call("addEventListener", "click", reverse)
+	// Pass data to buffer
+	gl.Call("bufferData", glTypes.elementArrayBuffer, indices, glTypes.staticDraw)
 
-	log.Println("Starting ticker")
-	roboTicker := time.NewTicker(5 * time.Second)
-	go autoTick(roboTicker, bumpClick)
+	// Unbind buffer
+	gl.Call("bindBuffer", glTypes.elementArrayBuffer, nil)
 
-	log.Println("Starting counter")
-	go countUp(count, ticker)
+	//// Shaders ////
 
-	for {
-		// Get new count
-		currentCount := <- count
+	// Vertex shader source code
+	vertCode := `
+	attribute vec3 coordinates;
+		
+	void main(void) {
+		gl_Position = vec4(coordinates, 1.0);
+	}`
 
-		// Update Text
-		output := fmt.Sprintf("Counter: %d", currentCount)
-		display.Set("innerHTML", output)
+	// Create a vertex shader object
+	vertShader := gl.Call("createShader", glTypes.vertexShader)
 
-		// Toggle Style class
-		reverseClasses := reverseButton.Get("classList")
-		if !forward {
-			reverseClasses.Call("add", "reverse")
-		} else {
-			reverseClasses.Call("remove", "reverse")
-		}
+	// Attach vertex shader source code
+	gl.Call("shaderSource", vertShader, vertCode)
 
-		// Set Text Color based on count
-		bumpScale := int(float64(currentCount)/ float64(MaxCount) * 255)
-		bumpColor := fmt.Sprintf("color: #%02x%02x00;", bumpScale, 255-bumpScale)
-		display.Call("setAttribute", "style", bumpColor)
+	// Compile the vertex shader
+	gl.Call("compileShader", vertShader)
 
-		// Hide help text
-		if !hidden {
-			hidden = true
-			help.Call("setAttribute", "hidden", "")
-		}
-	}
+	//fragment shader source code
+	fragCode := `
+	void main(void) {
+		gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+	}`
+
+	// Create fragment shader object
+	fragShader := gl.Call("createShader", glTypes.fragmentShader)
+
+	// Attach fragment shader source code
+	gl.Call("shaderSource", fragShader, fragCode)
+
+	// Compile the fragmentt shader
+	gl.Call("compileShader", fragShader)
+
+	// Create a shader program object to store
+	// the combined shader program
+	shaderProgram := gl.Call("createProgram")
+
+	// Attach a vertex shader
+	gl.Call("attachShader", shaderProgram, vertShader)
+
+	// Attach a fragment shader
+	gl.Call("attachShader", shaderProgram, fragShader)
+
+	// Link both the programs
+	gl.Call("linkProgram", shaderProgram)
+
+	// Use the combined shader program object
+	gl.Call("useProgram", shaderProgram)
+
+	//// Associating shaders to buffer objects ////
+
+	// Bind vertex buffer object
+	gl.Call("bindBuffer", glTypes.arrayBuffer, vertexBuffer)
+
+	// Bind index buffer object
+	gl.Call("bindBuffer", glTypes.elementArrayBuffer, indexBuffer)
+
+	// Get the attribute location
+	coord := gl.Call("getAttribLocation", shaderProgram, "coordinates")
+
+	// Point an attribute to the currently bound VBO
+	gl.Call("vertexAttribPointer", coord, 3, glTypes.float, false, 0, 0)
+
+	// Enable the attribute
+	gl.Call("enableVertexAttribArray", coord)
+
+	//// Drawing the triangle ////
+
+	// Clear the canvas
+	gl.Call("clearColor", 0.5, 0.5, 0.5, 0.9)
+	gl.Call("clear", glTypes.colorBufferBit)
+
+	// Enable the depth test
+	gl.Call("enable", glTypes.depthTest)
+
+	// Set the view port
+	gl.Call("viewport", 0, 0, width, height)
+
+	// Draw the triangle
+	gl.Call("drawElements", glTypes.triangles, len(indicesNative), glTypes.unsignedShort, 0)
 }
