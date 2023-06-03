@@ -1,12 +1,12 @@
 all: wasm-basic-triangle
 
-wasm-basic-triangle: output.wasm main.go
+wasm-basic-triangle: bundle.wasm main.go
 	go build -o wasm-basic-triangle main.go
 
-output.wasm: bundle.go
+bundle.wasm: bundle.go
 	GOOS=js GOARCH=wasm go build -o bundle.wasm bundle.go
 
-run: output.wasm wasm-basic-triangle
+run: bundle.wasm wasm-basic-triangle
 	./wasm-basic-triangle
 
 clean:
