@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net/http"
-	"log"
 	"io/ioutil"
+	"log"
+	"net/http"
 	"runtime"
 )
 
